@@ -1,0 +1,19 @@
+{
+  "name": "intp-bot",
+  "version": "1.0.0",
+  "description": "A bot for the one and only, true INTP server.",
+  "main": "main.js",
+  "dependencies": {
+    "assert": "^2.0.0",
+    "discord.js": "^12.4.1",
+    "dotenv": "^8.2.0",
+    "mongodb": "^3.6.2",
+    "mysql": "^2.18.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "maramizo, conic, sergen",
+  "license": "ISC"
+}
