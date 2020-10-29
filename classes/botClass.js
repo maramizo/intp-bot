@@ -54,9 +54,9 @@ class Bot{
             let messages = await channel.messages.fetch({ limit: limit })
             messages = messages.filter(m => m.author.id === userID);
             messages.forEach(m => {
-                m.content = m.content.replace(this.mentionRegEx, "");
-                if(this.filterBotCommands(m.content) == true){ //Remove bot commands & messages with less than two words.
-                    out.push({user_id: m.author.id, message: m.content, timestamp: m.createdTimestamp});
+                var content = m.content.replace(this.mentionRegEx, "");
+                if(this.filterBotCommands(content) == true){ //Remove bot commands & messages with less than two words.
+                    out.push({user_id: m.author.id, message: content, timestamp: m.createdTimestamp});
                 }                
             })
         } else {
@@ -72,8 +72,9 @@ class Bot{
                 
                 let messages = await channel.messages.fetch(options);
                 messages.forEach(m => {
-                    if(this.filterBotCommands(m.content) == true && m.author.id === userID){ //Remove bot commands & messages with less than two words.
-                        out.push({user_id: m.author.id, message: m.content, timestamp: m.createdTimestamp});
+                    var content = m.content.replace(this.mentionRegEx, "");
+                    if(this.filterBotCommands(content) == true && m.author.id === userID){ //Remove bot commands & messages with less than two words.
+                        out.push({user_id: m.author.id, message: content, timestamp: m.createdTimestamp});
                     }
                     last_id = m.id;
                 });
