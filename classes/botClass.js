@@ -14,7 +14,7 @@ class Bot{
         var command = message.content.substr(2).toLowerCase();
         if(command.startsWith("type")){
             message.channel.startTyping();
-            message.channel.send("Finding existing messages from " + message.author.username + "#" + message.author.discriminator + "...").then(async (bot_message) => {
+            message.channel.send("Finding existing messages from " + message.author.tag + "...").then(async (bot_message) => {
                 var lastMessage = DBHandler.findLastMessage(message.author.id); //Check DB for messages from user ID.
                 if(lastMessage == null || lastMessage == undefined){
                     setTimeout(function(){bot_message.edit("No existing messages found; collecting data. This might take a bit..")}, 2000);
