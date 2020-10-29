@@ -116,8 +116,11 @@ class Bot{
         if(message == undefined || message == null)
             return false;
         
-        var words = message.split(" ");
+        var words = message.split(" "); // If message has less than 3 words
         if(words.length < 3)
+            return false;
+        
+        if(message.match(/^[$!-]/) != null) // If message starts with $, ! or -
             return false;
         
         return true;
