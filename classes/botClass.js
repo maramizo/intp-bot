@@ -5,6 +5,7 @@ class Bot{
     constructor(client){
         this.userMessages = [];
         this.client = client;
+        this.mentionRegEx = /<@(.*?)>/g;
         console.log("Bot class created successfully.");
         console.log(`Logged in as ${this.client.user.tag}!`);
     }
@@ -53,6 +54,7 @@ class Bot{
             let messages = await channel.messages.fetch({ limit: limit })
             messages = messages.filter(m => m.author.id === userID);
             messages.forEach(m => {
+                m.content = m.content.replace(this.mentionRegEx, "");
                 if(this.filterBotCommands(m.content) == true){ //Remove bot commands & messages with less than two words.
                     out.push({user_id: m.author.id, message: m.content, timestamp: m.createdTimestamp});
                 }                
@@ -120,7 +122,7 @@ class Bot{
         if(words.length < 3)
             return false;
         
-        if(message.match(/^[$!-]/) != null) // If message starts with $, ! or -
+        if(message.match(/^[$!\-]|^[>]+|.!/) != null) // If message starts with $, ! or -
             return false;
         
         return true;
