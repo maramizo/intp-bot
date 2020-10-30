@@ -1,5 +1,6 @@
 const connectionHandler = require('./connectionHandler.js');
 const DBHandler = new connectionHandler();
+const https = require('https');
 class Bot{
     
     constructor(client){
@@ -16,14 +17,15 @@ class Bot{
         if(command.startsWith("type")){
             message.channel.startTyping();
             message.channel.send("Finding existing messages from " + message.author.tag + "...").then(async (bot_message) => {
-                var lastMessage = DBHandler.findLastMessage(message.author.id); //Check DB for messages from user ID.
-                if(lastMessage == null || lastMessage == undefined){
+                var lastMessage = await DBHandler.findLastMessage(message.author.id); //Check DB for messages from user ID.
+                if(lastMessage == null || lastMessage == undefined){ //User has no existing lastMessage stored.
                     setTimeout(function(){bot_message.edit("No existing messages found; collecting data. This might take a bit..")}, 2000);
                     this.userGuildMessages(bot_message.guild.id, message.author.id).then(x => {
                         var messages = this.cleanArray(x);
                         this.typeUser(messages, message.author, bot_message);
                     });
                 }else{
+                    setTimeout(function(){bot_message.edit("Existing messages found; collecting more data to increase accuracy. This might take a bit..")}, 2000);
                     //Get last message ID.
                     //Get messages after last message ID.
                     //this.typeUser(..?, ..?);
@@ -31,13 +33,48 @@ class Bot{
             });
             //Get user messages until last ID in DB is hit if any.
             //If last ID is hit before 1K limit is hit, get messages before earliest find in DB.
+        }else if(command.startsWith("deldata")){
+            DBHandler.deleteAllUserData(message.author.id).then(r => {
+                if(r > 0)
+                    message.channel.send(r + " existing messages have been deleted succesfully.");
+                else
+                    message.channel.send("You have no existing messages stored.");
+            });
         }
     }
     
     typeUser(messages, user, botmessage){
+        
+        var post_messages = [];
+        //console.dir(messages);
+        messages.forEach(m => {
+            post_messages.push(m.message);
+        });
+        var post_data = JSON.stringify({sentence: post_messages, key: process.env.POST_KEY});
+        
         DBHandler.insert(messages); //Store them into DB.
         botmessage.edit("Storing data into database...");
-        //Call PY script.
+        
+        const options = {
+            hostname: 'is-conic.com',
+            port: '443',
+            path: '/api/v1/b5_radar',
+            method: 'POST'
+        }
+        
+        const req = https.request(options, res => {
+            console.log(`statusCode: ${res.statusCode}`);
+            
+            res.on('data', d => {
+                console.log('data: ' + d);
+            });
+        });
+        
+        req.on('error', error => {
+            console.error(error);
+        });
+        
+        req.write(post_data);
         //Get result from PY.
         //Edit message to reflect results.        
     }
