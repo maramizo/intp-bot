@@ -1,5 +1,4 @@
 const GoogleChartsNode = require('google-charts-node');
-const fs = require('fs');
 var b64 = require('../exports/base64.js');
 
 class Chart{
@@ -29,11 +28,6 @@ class Chart{
         const image = await GoogleChartsNode.render(this.drawChartStr, {
           width: 1024,
           height: 1024,
-        });
-        fs.writeFile('logo.png', image, 'binary', function(err){
-            if(err)
-                throw err;
-            console.log('file saved');
         });
         return b64.bytesToBase64(image);
     }
