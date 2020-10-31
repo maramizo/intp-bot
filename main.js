@@ -9,7 +9,8 @@ client.on('ready', () => {
 });
 
 client.on('message', msg => {
-    if(msg.content.startsWith('i!') == true)
+    var lowerCase = msg.content.toLowerCase();
+    if(lowerCase.startsWith('i!') == true)
         INTPBot.handleCommands(msg);
 });
 

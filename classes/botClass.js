@@ -8,6 +8,8 @@ rootCas.addFile(path.resolve(__dirname, '../cert/intermediate.pem'));
 https.globalAgent.options.ca = rootCas;
 const chartMaker = require('./chartMaker.js');
 const imgur = require('imgur');
+const fs = require('fs');
+const request = require('request');
 
 class Bot{
     
@@ -66,29 +68,8 @@ class Bot{
                     //     -> Clean messages and send array of strings to backend.
                     
                     this.ehmessage(bot_message, "Existing messages found; collecting more data to increase accuracy. This might take a bit..");
-                    var oldMessages = await DBHandler.getAllMessages(message.author.id);
-                    //console.dir('__________________________________Existing Messages:');
-                    //console.dir(oldMessages);
                     
-                    var existingMessages = await DBHandler.getFirstMessagesPerChannel(message.author.id);
-                    var rMessages = await this.userGuildMessages(bot_message.guild.id, message.author.id, existingMessages);
-                    var newMessages = this.cleanArray(rMessages);
-                    
-                    if(newMessages == undefined || newMessages.length < 1000){
-                        var olderMessages = await this.userGuildMessages(bot_message.guild.id, message.author.id, existingMessages, true);
-                        olderMessages = this.cleanArray(olderMessages);
-                        newMessages.push.apply(newMessages, olderMessages);
-                    }
-                    var totalMessages = [];
-                    totalMessages.push.apply(totalMessages, oldMessages);
-                    totalMessages.push.apply(totalMessages, newMessages);
-                    console.dir('Total Messages: ' + totalMessages.length + '. New: ' + newMessages.length + '. Old messages: ' + oldMessages.length);
-                    //console.dir('___________________________New Messages:');
-                    //console.dir(newMessages);
-
-                    if(newMessages.length > 0)
-                        var res = await this.storeData(newMessages, bot_message);
-
+                    var totalMessages = await this.collectMoreData(message);
                     this.typeUser(totalMessages, bot_message, message.author);
                     
                 }else{
@@ -102,7 +83,7 @@ class Bot{
                     var collectedMessages = await this.userGuildMessages(bot_message.guild.id, message.author.id);
                     var messages = this.cleanArray(collectedMessages);
                     
-                    if(messages.length < 1){
+                    if(messages == undefined || messages.length < 1){
                         this.ehmessage(bot_message, "No messages found on this server by you. Are you sure you've typed in enough messages?");
                         return;
                     }
@@ -119,10 +100,180 @@ class Bot{
                 else
                     message.channel.send("You have no existing messages stored.");
             });
+        }else if(command.startsWith("ibmtype")){
+            if(this.usersWaiting[message.author.id] != null || this.usersWaiting[message.author.id] != undefined){
+                message.channel.send("I'm going as fast as I can...");
+                return;
+            }
+            this.usersWaiting[message.author.id] = true;
+            message.channel.startTyping();
+            message.channel.send("Finding existing messages from " + message.author.tag + "...").then(async (bot_message) => {
+                
+                var lastMessage = await DBHandler.findMessage(message.author.id);
+                message.channel.stopTyping();
+                
+                //Check if user has messages.                
+                if(lastMessage != null && lastMessage != undefined){
+                    var oldMessages = await DBHandler.getAllMessages(message.author.id);
+                    
+                    this.ehmessage(bot_message, "Existing messages found; collecting more data to increase accuracy. This might take a bit..");
+                    var totalMessages = await this.collectMoreData(message);
+                    
+                    this.ehmessage(bot_message, "Sending data to IBM.");
+                    this.IBMType(totalMessages, bot_message, message.author);
+                }else{
+                    this.ehmessage(bot_message, "No existing messages found; collecting data. This might take a bit..");
+                    var collectedMessages = await this.userGuildMessages(bot_message.guild.id, message.author.id);
+                    var messages = this.cleanArray(collectedMessages);
+                    
+                    if(messages == undefined || messages.length < 1){
+                        this.ehmessage(bot_message, "No messages found on this server by you. Are you sure you've typed in enough messages?");
+                        return;
+                    }
+                    
+                    this.storeData(messages, bot_message);
+                    this.IBMType(messages, bot_message, message.author);                    
+                }
+                
+            });
+            
+        }else if(command.startsWith("itf")){
+            if(this.usersWaiting[message.author.id] != null || this.usersWaiting[message.author.id] != undefined){
+                message.channel.send("I'm going as fast as I can...");
+                return;
+            }
+            this.usersWaiting[message.author.id] = true;
+            message.channel.startTyping();
+            message.channel.send("Finding existing messages from " + message.author.tag + "...").then(async (bot_message) => {
+                var lastMessage = await DBHandler.findMessage(message.author.id);
+                if(lastMessage == null || lastMessage == undefined){
+                    this.ehmessage(bot_message, "You cannot use this command unless if you already have stored your messages on this server. Please use i!ibmtype.");
+                    this.usersWaiting[message.author.id] = null;
+                    return;
+                }
+                var oldMessages = await DBHandler.getAllMessages(message.author.id);
+                this.ehmessage(bot_message, "Sending existing data to IBM.");
+                this.IBMType(oldMessages, bot_message, message.author);                
+                
+            });
+            
         }
-        /*else if(command.startsWith("l")){
-            this.debugMessage(message);
-        }*/
+    }
+    
+    async collectMoreData(message){
+        var oldMessages = await DBHandler.getAllMessages(message.author.id);
+
+        var existingMessages = await DBHandler.getFirstMessagesPerChannel(message.author.id);
+        var rMessages = await this.userGuildMessages(bot_message.guild.id, message.author.id, existingMessages);
+        var newMessages = this.cleanArray(rMessages);
+
+        if(newMessages == undefined || newMessages.length < 1000){
+            var olderMessages = await this.userGuildMessages(bot_message.guild.id, message.author.id, existingMessages, true);
+            olderMessages = this.cleanArray(olderMessages);
+            newMessages.push.apply(newMessages, olderMessages);
+        }
+        
+        var totalMessages = [];
+        totalMessages.push.apply(totalMessages, oldMessages);
+        totalMessages.push.apply(totalMessages, newMessages);
+        console.dir('Total Messages: ' + totalMessages.length + '. New: ' + newMessages.length + '. Old messages: ' + oldMessages.length);
+      
+        if(newMessages.length > 0)
+            var res = await this.storeData(newMessages, bot_message);
+        
+        return totalMessages;
+    }
+    
+    formatRequestMessages(messages){
+        var formattedMessages = [];
+        messages.forEach(m => {
+            formattedMessages.push(m.message);
+        });
+        return formattedMessages.join(" ");
+    }
+    
+    async IBMType(messages, botmessage, user){
+        var dataString = this.formatRequestMessages(messages);
+        
+        var options = {
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8',
+                'Accept': 'application/json'
+            },
+            url: 'https://api.eu-gb.personality-insights.watson.cloud.ibm.com/instances/2ae0aa28-5b31-44a0-8d79-ef37157b7a9e/v3/profile?version=2017-10-13',
+            method: 'POST',
+            body: dataString,
+            auth: {
+                'user':'apikey',
+                'pass':'8NcI4rUOjE_4kx1104XL5IMY04qXYNrXg389OxnSY611'
+            }
+        }
+        
+        request(options, async (error, res, body) => {
+            if(error){
+                console.error(error);
+                botmessage.edit("Error communicating with backend server. Please try again later");
+                botmessage.channel.stopTyping();
+
+                this.usersWaiting[user.id] = null;                
+            }else if(res){
+                console.log('statusCode:', res.statusCode);
+                  
+                this.ehmessage(botmessage, "Finalizing data (parsing information).", 100);
+                
+                var info = JSON.parse(body);
+                var predictions = {
+                    OPN: (info.personality[0].percentile)*100,
+                    CON: (info.personality[1].percentile)*100,
+                    EXT: (info.personality[2].percentile)*100,
+                    AGR: (info.personality[3].percentile)*100,
+                    NEU: (info.personality[4].percentile)*100,
+                };
+                
+                this.ehmessage(botmessage, "Finalizing data (drawing chart).", 100);
+                
+                var chart = new chartMaker(predictions, user.username);
+                var imageB64 = await chart.renderChart();
+                    
+                this.ehmessage(botmessage, "Finalizing data (uploading chart).", 100);
+                
+                imgur.uploadBase64(imageB64).then(async(json) => {
+                    var imageLink = json.data.link;
+                    console.dir(imageLink);
+                    
+                    var newestMessage = await DBHandler.findMessage(user.id);
+                    var oldestMessage = await DBHandler.findMessage(user.id, 1);
+                    
+                    var newestDateTime = newestMessage.timestamp;
+                    var oldestDateTime = oldestMessage.timestamp;
+                        
+                    var nDT = new Date(newestDateTime).toLocaleDateString("en-US");
+                    var oDT = new Date(oldestDateTime).toLocaleDateString("en-US");
+                    
+                    const predictionEmbed = new this.Discord.MessageEmbed()
+                    .setColor('#0099ff')
+                    .setTitle(user.username + "'s Big 5 Personality Score")
+                    .setDescription('Based on ' + info.word_count + ' words from ' + nDT + ' to ' + oDT + '.')
+                    .setURL(imageLink)
+                    .setAuthor('INTP Bot')
+                    .addFields(
+                        { name: 'Openness', value: predictions.OPN.toFixed(2), inline: true},
+                        { name: 'Conscientiousness', value: predictions.CON.toFixed(2), inline: true},
+                        { name: 'Extraversion', value: predictions.EXT.toFixed(2), inline: true},
+                        { name: 'Agreeableness', value: predictions.AGR.toFixed(2), inline: true},
+                        { name: 'Neuroticism', value: predictions.NEU.toFixed(2), inline: true})
+                    .setImage(imageLink)
+                    .setTimestamp()
+                    .setFooter('© Conic, Sergen, Moe & IBM.');
+
+                    botmessage.channel.send(predictionEmbed);
+                    botmessage.delete();
+                    
+                    this.usersWaiting[user.id] = null;
+                
+                });
+            }
+        });
     }
     
     async storeData(messages, bot_message){
@@ -141,6 +292,10 @@ class Bot{
             });
         }
         
+        var messageCount = post_messages.length;
+        
+        post_messages = [post_messages.join(" ")];
+        
         var post_data = JSON.stringify({sentence: post_messages, key: process.env.POST_KEY});
         console.log(post_data);
         
@@ -155,6 +310,9 @@ class Bot{
             
         const req = https.request(options, res => {
             console.log(`statusCode: ${res.statusCode}`);        
+                 
+            //Get result from PY.
+            //Edit message to reflect results. 
 
             res.on('data', async(d) => {                
                 var predictions = JSON.parse(d).predictions;
@@ -176,7 +334,7 @@ class Bot{
                     const predictionEmbed = new this.Discord.MessageEmbed()
                     .setColor('#0099ff')
                     .setTitle(user.username + "'s Big 5 Personality Score")
-                    .setDescription('Based on ' + post_messages.length + ' messages from ' + nDT + ' to ' + oDT + '.')
+                    .setDescription('Based on ' + messageCount + ' messages from ' + nDT + ' to ' + oDT + '.')
                     .setURL(imageLink)
                     .setAuthor('INTP Bot')
                     .addFields(
@@ -209,8 +367,6 @@ class Bot{
         });
 
         req.write(post_data);
-        //Get result from PY.
-        //Edit message to reflect results. 
         
         req.end();
     }
@@ -235,71 +391,73 @@ class Bot{
         }
         
         return Promise.all(this.client.guilds.cache.get(guildID).channels.cache.map(async (ch) => {
-            if (ch.type === 'text'){
-                if(existingMessages != null){
-                    var returned_message = await this.getMessages(ch, userID, 1000, channelMessageIndex[ch.id], before);
-                    returned_message.forEach(m => {
-                        message_array.push(m);
-                    });        
-                }else{
-                    var returned_message = await this.getMessages(ch, userID, 1000);
-                    returned_message.forEach(m => {
-                        message_array.push(m);
-                    });
+            try{
+                if (ch.type === 'text'){
+                    if(existingMessages != null){
+                        var returned_message = await this.getMessages(ch, userID, 10000, channelMessageIndex[ch.id], before);
+                        if(returned_message != undefined){
+                            returned_message.forEach(m => {
+                                message_array.push(m);
+                            });
+                        }
+                    }else{
+                        var returned_message = await this.getMessages(ch, userID, 10000);
+                        if(returned_message != undefined){
+                            returned_message.forEach(m => {
+                                message_array.push(m);
+                            });
+                        }
+                    }
                 }
-            }
-            index++;
-            if(index == ar_length){
-                return message_array;
+                index++;
+                if(index == ar_length){
+                    return message_array;
+                }
+            }catch(err){
+                console.error(err);
             }
         }));
     }
     
-    async getMessages(channel, userID, limit = 1000, eMessage = null, before = true){
-        let out = []
-        let rounds = (limit / 100) + (limit % 100 ? 1 : 0);
-        var last_id = "";
-        
-        const options = {
-            limit: 100,
-        }
-        
-        if(eMessage != null && before == true)
-            last_id = eMessage.firstMessage;
-        else if(eMessage != null && before == false)
-            last_id = eMessage.lastMessage;
-            
-        for (let x = 0; x < rounds; x++) {
-            if (last_id.length > 0) {
-                if(before == true)
-                    options.before = last_id;
-                else
-                    options.after = last_id;
-            }                
+    async getMessages(channel, userID, limit = 10000, eMessage = null, before = true){
+        try{
+            let out = [];
+            let rounds = (limit / 100) + (limit % 100 ? 1 : 0);
+            var last_id = "";
 
-        
-            //console.dir('Finding messages ' + ((before == true)? 'before' : 'after') + ' message ID ' + last_id + ' on round: ' + x + ' in channel: ' + channel.id);
-            //console.dir(options);
-            let messages = await channel.messages.fetch(options);   
-            if(before == false)
-                messages = this.reverseArr(messages);
-            messages.forEach(m => {
-                var content = m.content.replace(this.mentionRegEx, "");
-                if(this.filterBotCommands(content) == true && m.author.id === userID){ //Remove bot commands & messages with less than two words.
-                    var qCheck = false;
-                    if(before == true && m.id < options.before)
-                        qCheck = true;
-                    else if(before == false && m.id > options.after)
-                        qCheck = true;
-                    //console.dir('added m_id: ' + m.id + ', before: ' + before + ', original_id: ' + last_id + ', qCheck: ' + qCheck + ', round: ' + x + 'channel_id: ' + channel.id);
-                    out.push({user_id: m.author.id, message: content, message_id: m.id, channel_id: m.channel.id, timestamp: m.createdTimestamp});
-                }
-                last_id = m.id;
-            });
-            //console.dir('round: ' + x + ', last_id: ' + last_id + ' channel_id: ' + channel.id);
+            const options = {
+                limit: 100,
+            }
+
+            if(eMessage != null && before == true)
+                last_id = eMessage.firstMessage;
+            else if(eMessage != null && before == false)
+                last_id = eMessage.lastMessage;
+
+            for (let x = 0; x < rounds; x++) {
+                if (last_id.length > 0) {
+                    if(before == true)
+                        options.before = last_id;
+                    else
+                        options.after = last_id;
+                }                
+
+                let messages = await channel.messages.fetch(options);
+                if(before == false)
+                    messages = this.reverseArr(messages);
+                messages.forEach(m => {
+                    var content = m.content.replace(this.mentionRegEx, "");
+                    if(this.filterBotCommands(content) == true && m.author.id === userID){ //Remove bot commands & messages with less than two words.
+                        out.push({user_id: m.author.id, message: content, message_id: m.id, channel_id: m.channel.id, timestamp: m.createdTimestamp});
+                    }
+                    last_id = m.id;
+                });
+            }
+            return out;
+        }catch(error){
+            console.error(error);
+            console.dir(channel.name);
         }
-        //console.dir('loop done');
-        return out;
     }
     
     async debugMessage(message, limit=1000){
@@ -323,55 +481,6 @@ class Bot{
         }
         return ret;
     }
-    
-    /*handleCommands(message){
-        var command = message.content.substr(2).toLowerCase();
-        if(command.startsWith("type")){
-            message.channel.startTyping();
-            message.channel.send("Finding existing messages from " + message.author.tag + "...").then(async (bot_message) => {
-                var lastMessage = await DBHandler.findLastMessage(message.author.id); //Check DB for messages from user ID.
-                if(lastMessage == null || lastMessage == undefined){ //User has no existing lastMessage stored.
-                    setTimeout(function(){bot_message.edit("No existing messages found; collecting data. This might take a bit..")}, 2000);
-                    this.userGuildMessages(bot_message.guild.id, message.author.id).then(x => {
-                        var messages = this.cleanArray(x);
-                        this.typeUser(messages, message.author, bot_message);
-                    });
-                }else{
-                    setTimeout(function(){bot_message.edit("Existing messages found; collecting more data to increase accuracy. This might take a bit..")}, 2000);
-                    console.dir(lastMessage.message_id); //Get last message ID.
-                    var messages = await this.userGuildMessages(bot_message.guild.id, message.author.id, null, lastMessage.message_id);//Get messages after last message ID.
-                    messages = this.cleanArray(messages);                    
-                    //Get user messages until last ID in DB is hit if any.
-                    //If last ID is hit before 1K limit is hit, get messages before earliest find in DB.                    
-                    if(messages.length < 1000){
-                        var firstMessage = await DBHandler.findLastMessage(message.author.id, 1); //Get user's first message.
-                        var older_messages = await this.userGuildMessages(bot_message.guild.id, message.author.id, lastMessage.message_id);
-                        older_messages = this.cleanMessages(this.cleanArray(older_messages));
-                        messages.push(older_messages);
-                        messages = messages[0];
-                    }
-        
-                    var old_messages = await DBHandler.getAllMessages(message.author.id);
-                    console.dir(old_messages);
-                    old_messages = this.cleanMessages(old_messages);
-                    old_messages.forEach(m => {
-                        messages.push(m.message);
-                    });
-                    
-                    console.dir(messages);
-                    
-                    this.typeUser(messages, message.author, bot_message);
-                }
-            });
-        }else if(command.startsWith("deldata")){
-            DBHandler.deleteAllUserData(message.author.id).then(r => {
-                if(r > 0)
-                    message.channel.send(r + " existing messages have been deleted succesfully.");
-                else
-                    message.channel.send("You have no existing messages stored.");
-            });
-        }
-    }*/
     
     cleanArray(array){
         return array.filter(element => {
