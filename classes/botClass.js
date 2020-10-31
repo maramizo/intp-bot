@@ -161,14 +161,22 @@ class Bot{
                 var chart = new chartMaker(predictions, user.username);
                 
                 var imageB64 = await chart.renderChart();
-                imgur.uploadBase64(imageB64).then(json => {
+                imgur.uploadBase64(imageB64).then(async(json) => {
                     var imageLink = json.data.link;
-                    console.log(imageLink);
+                    
+                    var newestMessage = await DBHandler.findMessage(user.id);
+                    var oldestMessage = await DBHandler.findMessage(user.id, 1);
+                    
+                    var newestDateTime = newestMessage.timestamp;
+                    var oldestDateTime = oldestMessage.timestamp;
+                        
+                    var nDT = new Date(newestDateTime).toLocaleDateString("en-US");
+                    var oDT = new Date(oldestDateTime).toLocaleDateString("en-US");
                     
                     const predictionEmbed = new this.Discord.MessageEmbed()
                     .setColor('#0099ff')
                     .setTitle(user.username + "'s Big 5 Personality Score")
-                    .setDescription('Based on ' + post_messages.length + ' messages.')
+                    .setDescription('Based on ' + post_messages.length + ' messages from ' + nDT + ' to ' + oDT + '.')
                     .setURL(imageLink)
                     .setAuthor('INTP Bot')
                     .addFields(
@@ -189,13 +197,6 @@ class Bot{
                 }).catch(function(err){
                     console.error(err);
                 });
-                /*
-                this.shmessage(botmessage.channel, "Your results are in! You have scored:" + '\n'
-                              + "Openness: " + dimensions.OPN + '\n'
-                              + "Conscientiousness: " + dimensions.CON + '\n'
-                              + "Extraversion: " + dimensions.EXT + '\n' 
-                              + "Agreeableness: " + dimensions.AGR + '\n' 
-                              + "Neuroticism: " + dimensions.NEU);*/
             });
         });
 
