@@ -17,7 +17,7 @@ class Chart{
         ['Neuroticism', ${scores.NEU.toFixed(2)}],
       ]);
       // Set chart options
-      var options = { title: "${name}'s Big 5 Personality Traits Score" };
+      var options = { title: "${name}'s Big 5 Personality Traits Score", vAxis: {minValue: 0, maxValue: 100 } };
       // Instantiate and draw our chart, passing in some options.
       var chart = new google.visualization.ColumnChart(document.getElementById('chart_div'));
       chart.draw(data, options);
@@ -29,6 +29,11 @@ class Chart{
         const image = await GoogleChartsNode.render(this.drawChartStr, {
           width: 1024,
           height: 1024,
+        });
+        fs.writeFile('logo.png', image, 'binary', function(err){
+            if(err)
+                throw err;
+            console.log('file saved');
         });
         return b64.bytesToBase64(image);
     }
