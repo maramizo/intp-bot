@@ -13,9 +13,11 @@ class connectionHandler{
                 client.close();
             }
         });
-    }
+    }    
     
-    async findLastMessage(userid, database = process.env.DB_NAME, collection = process.env.CL_NAME){
+    // findMessage finds the newest stored user message by default.
+    // sortOrder = 1 finds the oldest.
+    async findMessage(userid, sortOrder = -1, database = process.env.DB_NAME, collection = process.env.CL_NAME){
         const client = await MongoClient.connect(URL)
             .catch(err => {console.log(err);});
         
@@ -24,43 +26,82 @@ class connectionHandler{
         
         try{
             var dbo = client.db(database);
-            let res = await dbo.collection(collection).find({ user_id: userid }).sort({message_id: -1}).limit(1).toArray();
+            let res = await dbo.collection(collection).find({ user_id: userid }).sort({message_id: sortOrder}).limit(1).toArray();
             res = res[0];
             return res;
         } catch(err) {
             throw err;
         } finally {
             client.close();
+        }        
+    }
+    
+    async insert(data, database = process.env.DB_NAME, collection = process.env.CL_NAME){
+        const client = await MongoClient.connect(URL)
+            .catch(err => {console.log(err)});
+        
+        if(!client)
+            return;
+        
+        var dbo = client.db(database);
+        try{
+            if(Array.isArray(data) == false){
+                const res = await dbo.collection(collection).insertOne(data);
+                console.log("One row inserted");
+                client.close();
+                return true;
+            }else{
+                const res = await dbo.collection(collection).insertMany(data);
+                console.log("Number of rows inserted: " + res.insertedCount);
+                client.close();
+                return true;
+            }
+        } catch(err) {
+            console.log(err);
+        } finally {
+            client.close();
         }
     }
     
-    insert(data, database = process.env.DB_NAME, collection = process.env.CL_NAME){
-         MongoClient.connect(URL, function(err, client) {
-            if(err)
-                throw err;
-            else{              
-                var dbo = client.db(database);
-                if(Array.isArray(data) == false){
-                    dbo.collection(collection).insertOne(data, function(err, res){
-                        if(err)
-                            throw err;
-                        else{
-                            console.log("One row inserted.");
-                            client.close;
-                        }
-                    });
-                }else{
-                    dbo.collection(collection).insertMany(data, function(err, res){
-                        if(err)
-                            throw err;
-                        else{
-                            console.log("Number of rows inserted: " + res.insertedCount);
-                            client.close;
-                        }
-                    });                    
-                }
-            }
-        });
+    async getFirstMessagesPerChannel(userid, database = process.env.DB_NAME, collection = process.env.CL_NAME){
+        const client = await MongoClient.connect(URL)
+            .catch(err => {console.log(err);});
+        
+        if(!client)
+            return;
+        
+        try{
+            var dbo = client.db(database);
+            let res = await dbo.collection(collection).aggregate([
+                {'$match': {'user_id': userid}}, 
+                {'$sort': {'message_id': 1, 'channel_id': 1}}, 
+                {'$group': {'_id': '$channel_id', 'firstMessage': {'$first': '$message_id'}, 'lastMessage': {'$last': '$message_id'}}}
+            ]).toArray();
+            return res;
+        }catch(err){
+            throw err;
+        }finally{
+            client.close();
+        }
+        
+    }
+    
+    async getAllMessages(userid, database = process.env.DB_NAME, collection = process.env.CL_NAME){
+        const client = await MongoClient.connect(URL)
+            .catch(err => {console.log(err);});
+        
+        if(!client)
+            return;
+        
+        try{
+            var dbo = client.db(database);
+            let res = await dbo.collection(collection).find({ user_id: userid }).toArray();
+            return res;
+        }catch(err){
+            throw err;
+        }finally{
+            client.close();
+        }
     }
     
     select(){}
@@ -77,12 +118,13 @@ class connectionHandler{
         try{
             var dbo = client.db(process.env.DB_NAME);
             let res = await dbo.collection(process.env.CL_NAME).deleteMany({ user_id: userid });
+            client.close();
             return res.result.n;
         } catch(err) {
             throw err;
         } finally {
             client.close();
-        }        
+        }
     }
 }
 module.exports = connectionHandler;

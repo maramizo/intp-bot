@@ -5,7 +5,7 @@ const client = new Discord.Client();
 var INTPBot;
 
 client.on('ready', () => {
-    INTPBot = new Bot(client);
+    INTPBot = new Bot(client, Discord);
 });
 
 client.on('message', msg => {
