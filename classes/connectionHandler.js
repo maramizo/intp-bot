@@ -1,6 +1,5 @@
 require('dotenv').config();
 const MongoClient = require('mongodb').MongoClient;
-const test = require('assert');
 const URL = process.env.DB_URI;
 
 class connectionHandler{
