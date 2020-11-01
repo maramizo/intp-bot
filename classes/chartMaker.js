@@ -2,20 +2,18 @@ const GoogleChartsNode = require('google-charts-node');
 var b64 = require('../exports/base64.js');
 
 class Chart{
-    constructor(scores, name){        
-        console.dir(scores);
-        console.dir(name);
+    constructor(scores, axis, name){
         this.drawChartStr = `
           // Create the data table.
           var data = new google.visualization.DataTable();
           data.addColumn('string', 'Category');
           data.addColumn('number', 'Points');
           data.addRows([
-            ['Openness', ${scores.OPN.toFixed(2)}],
-            ['Conscientiousness', ${scores.CON.toFixed(2)}],
-            ['Extraversion', ${scores.EXT.toFixed(2)}],
-            ['Agreeableness', ${scores.AGR.toFixed(2)}],
-            ['Neuroticism', ${scores.NEU.toFixed(2)}],
+            ['${axis[0]}', ${scores[0].toFixed(2)}],
+            ['${axis[1]}', ${scores[1].toFixed(2)}],
+            ['${axis[2]}', ${scores[2].toFixed(2)}],
+            ['${axis[3]}', ${scores[3].toFixed(2)}],
+            ['${axis[4]}', ${scores[4].toFixed(2)}],
           ]);
           // Set chart options
           var options = { title: "${name}'s Big 5 Personality Traits Score", vAxis: {minValue: 0, maxValue: 100 } };

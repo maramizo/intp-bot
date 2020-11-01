@@ -69,7 +69,7 @@ class Bot{
                     
                     this.ehmessage(bot_message, "Existing messages found; collecting more data to increase accuracy. This might take a bit..");
                     
-                    var totalMessages = await this.collectMoreData(message);
+                    var totalMessages = await this.collectMoreData(message, bot_message);
                     this.typeUser(totalMessages, bot_message, message.author);
                     
                 }else{
@@ -117,7 +117,7 @@ class Bot{
                     var oldMessages = await DBHandler.getAllMessages(message.author.id);
                     
                     this.ehmessage(bot_message, "Existing messages found; collecting more data to increase accuracy. This might take a bit..");
-                    var totalMessages = await this.collectMoreData(message);
+                    var totalMessages = await this.collectMoreData(message, bot_message);
                     
                     this.ehmessage(bot_message, "Sending data to IBM.");
                     this.IBMType(totalMessages, bot_message, message.author);
@@ -160,7 +160,7 @@ class Bot{
         }
     }
     
-    async collectMoreData(message){
+    async collectMoreData(message, bot_message){
         var oldMessages = await DBHandler.getAllMessages(message.author.id);
 
         var existingMessages = await DBHandler.getFirstMessagesPerChannel(message.author.id);
@@ -192,6 +192,23 @@ class Bot{
         return formattedMessages.join(" ");
     }
     
+    createEmbed(user, description, image, fields){
+        this.description = description;
+        
+        const predictionEmbed = new this.Discord.MessageEmbed()
+        .setColor('#0099ff')
+        .setTitle(user.username + "'s Big 5 Personality Score")
+        .setDescription(description)
+        .setURL(image)
+        .setAuthor('INTP Bot')
+        .addFields(fields)
+        .setImage(image)
+        .setTimestamp()
+        .setFooter('© Conic, Sergen, Moe & IBM.');
+        
+        return predictionEmbed;
+    }
+    
     async IBMType(messages, botmessage, user){
         var dataString = this.formatRequestMessages(messages);
         
@@ -217,29 +234,103 @@ class Bot{
 
                 this.usersWaiting[user.id] = null;                
             }else if(res){
-                console.log('statusCode:', res.statusCode);
-                  
-                this.ehmessage(botmessage, "Finalizing data (parsing information).", 100);
+                try{
+                    console.log('statusCode:', res.statusCode);
+
+                    this.ehmessage(botmessage, "Finalizing data (parsing information).", 100);
+
+                    var info = JSON.parse(body);
+
+                    var imageLinks = [];
+                    var personalityFields = [];
+
+                    var mainPersona = [];
+                    var mainAxis = [];
+
+                    var newImage, newImageLink;
+                    var pItem, child;
+                    
+                    info.personality.forEach((personalityItem, index) => {
+                        if(personalityFields[0] == undefined)
+                            personalityFields[0] = [];
+                        personalityFields[0][personalityItem.name] = personalityItem.percentile*100;
+                        personalityItem.children.forEach((child, cIndex) => {
+                            if(personalityFields[index+1] == undefined)
+                                personalityFields[index+1] = [];
+                            personalityFields[index+1][child.name] = child.percentile*100;
+                        });
+                    });
+                    
+                    for(var index in personalityFields){
+                        
+                        this.ehmessage(botmessage, "Finalizing data (drawing chart #" + (parseInt(index) + 1) + ").", 100);                        
+                        var chart = new chartMaker(Object.values(personalityFields[index]), Object.keys(personalityFields[index]), user.username);
+                        newImage = await chart.renderChart();
+
+                        this.ehmessage(botmessage, "Finalizing data (uploading chart #" + (parseInt(index) + 1) + ").", 100);                        
+                        newImageLink = await imgur.uploadBase64(newImage);
+                        newImageLink = newImageLink.data.link;
+                        imageLinks.push(newImageLink);
+                    }
+                    
+                    // Image Links & personalityFields: M, C, E, A, N, O ???
+                    // console.dir(imageLinks);
+                    var orderedPf = [];
+                    var index = 0;
+                    
+                    Object.keys(personalityFields).forEach(pF => {
+                        orderedPf[index] = [];
+                        Object.keys(personalityFields[pF]).forEach(pfKey => {
+                            orderedPf[index].push({name: pfKey, value: personalityFields[pF][pfKey].toFixed(2), inline:true});
+                        });
+                        index++;
+                    });                    
+                    
+                    var newestMessage = await DBHandler.findMessage(user.id);
+                    var oldestMessage = await DBHandler.findMessage(user.id, 1);
+                    
+                    var newestDateTime = newestMessage.timestamp;
+                    var oldestDateTime = oldestMessage.timestamp;
+                        
+                    var nDT = new Date(newestDateTime).toLocaleDateString("en-US");
+                    var oDT = new Date(oldestDateTime).toLocaleDateString("en-US");
+                    
+                    const predictionEmbed = this.createEmbed(user, 'Based on ' + info.word_count + ' words from ' + nDT + ' to ' + oDT + '.', imageLinks[0], orderedPf[0]);
+                    var selected = 0;
+                    
+                    botmessage.channel.send(predictionEmbed).then(embedMessage => {
+                        var oceanReacts = ['⬅️', '🇴', '🇨', '🇪', '🇦', '🇳']
+                        const filter = (reaction, userX) => {return userX.id == user.id && (oceanReacts.includes(reaction.emoji.name))};
+                        oceanReacts.forEach(r => {embedMessage.react(r)});
+                        var collector = embedMessage.createReactionCollector(filter);
+                        collector.on('collect', collected => {
+                            if(oceanReacts.includes(collected.emoji.name)){
+                                oceanReacts.forEach((react, index) => {
+                                    if(react == collected.emoji.name){
+                                        const editedEmbed = this.createEmbed(user, this.description, imageLinks[index], orderedPf[index]);
+                                        embedMessage.edit(editedEmbed);
+                                    }
+                                });
+                            }
+                        });
+                    });
+                    botmessage.delete();
+                    this.usersWaiting[user.id] = null;
+                    
+                }catch(err){
+                    console.error(err);
+                }
                 
-                var info = JSON.parse(body);
-                var predictions = {
-                    OPN: (info.personality[0].percentile)*100,
-                    CON: (info.personality[1].percentile)*100,
-                    EXT: (info.personality[2].percentile)*100,
-                    AGR: (info.personality[3].percentile)*100,
-                    NEU: (info.personality[4].percentile)*100,
-                };
-                
-                this.ehmessage(botmessage, "Finalizing data (drawing chart).", 100);
-                
-                var chart = new chartMaker(predictions, user.username);
+                /*var chart = new chartMaker(predictions, axisNames, user.username);
                 var imageB64 = await chart.renderChart();
                     
                 this.ehmessage(botmessage, "Finalizing data (uploading chart).", 100);
                 
                 imgur.uploadBase64(imageB64).then(async(json) => {
-                    var imageLink = json.data.link;
-                    console.dir(imageLink);
+                    var baseImage = json.data.link;
+                    console.dir(baseImage);
+                    
+                    chart = new ChartMaker(predictions, axisNames, user.username);
                     
                     var newestMessage = await DBHandler.findMessage(user.id);
                     var oldestMessage = await DBHandler.findMessage(user.id, 1);
@@ -254,7 +345,7 @@ class Bot{
                     .setColor('#0099ff')
                     .setTitle(user.username + "'s Big 5 Personality Score")
                     .setDescription('Based on ' + info.word_count + ' words from ' + nDT + ' to ' + oDT + '.')
-                    .setURL(imageLink)
+                    .setURL(baseImage)
                     .setAuthor('INTP Bot')
                     .addFields(
                         { name: 'Openness', value: predictions.OPN.toFixed(2), inline: true},
@@ -262,7 +353,7 @@ class Bot{
                         { name: 'Extraversion', value: predictions.EXT.toFixed(2), inline: true},
                         { name: 'Agreeableness', value: predictions.AGR.toFixed(2), inline: true},
                         { name: 'Neuroticism', value: predictions.NEU.toFixed(2), inline: true})
-                    .setImage(imageLink)
+                    .setImage(baseImage)
                     .setTimestamp()
                     .setFooter('© Conic, Sergen, Moe & IBM.');
 
@@ -271,7 +362,7 @@ class Bot{
                     
                     this.usersWaiting[user.id] = null;
                 
-                });
+                });*/
             }
         });
     }
@@ -316,7 +407,16 @@ class Bot{
 
             res.on('data', async(d) => {                
                 var predictions = JSON.parse(d).predictions;
-                var chart = new chartMaker(predictions, user.username);
+                var predictionsX = [
+                    predictions.OPN,
+                    predictions.CON,
+                    predictions.EXT,
+                    predictions.AGR,
+                    predictions.NEU
+                ];
+                
+                var axisX = ['Openness', 'Conscientiousness', 'Extraversion', 'Agreeableness', 'Neuroticism'];                
+                var chart = new chartMaker(predictionsX, axisX, user.username);
                 
                 var imageB64 = await chart.renderChart();
                 imgur.uploadBase64(imageB64).then(async(json) => {
