@@ -23,23 +23,22 @@ class Bot{
         this.usersWaiting = [];
     }
     
-    
     //ehmessage -> Edit Humane Message.
     //          -> Edits a message after a set amount of time.
     //          -> Displays typing icon before & removes it after.
     ehmessage(message, string, time = 2000){
         message.channel.startTyping();
         setTimeout(function(){
-            message.edit(string);
             message.channel.stopTyping();
+            message.edit(string);
         }, time);
     }    
     
     shmessage(channel, string, time = 2000){
         channel.startTyping();
         setTimeout(function(){
-            channel.send(string);
             channel.stopTyping();
+            channel.send(string);
         }, time);
     }    
     
@@ -320,49 +319,6 @@ class Bot{
                 }catch(err){
                     console.error(err);
                 }
-                
-                /*var chart = new chartMaker(predictions, axisNames, user.username);
-                var imageB64 = await chart.renderChart();
-                    
-                this.ehmessage(botmessage, "Finalizing data (uploading chart).", 100);
-                
-                imgur.uploadBase64(imageB64).then(async(json) => {
-                    var baseImage = json.data.link;
-                    console.dir(baseImage);
-                    
-                    chart = new ChartMaker(predictions, axisNames, user.username);
-                    
-                    var newestMessage = await DBHandler.findMessage(user.id);
-                    var oldestMessage = await DBHandler.findMessage(user.id, 1);
-                    
-                    var newestDateTime = newestMessage.timestamp;
-                    var oldestDateTime = oldestMessage.timestamp;
-                        
-                    var nDT = new Date(newestDateTime).toLocaleDateString("en-US");
-                    var oDT = new Date(oldestDateTime).toLocaleDateString("en-US");
-                    
-                    const predictionEmbed = new this.Discord.MessageEmbed()
-                    .setColor('#0099ff')
-                    .setTitle(user.username + "'s Big 5 Personality Score")
-                    .setDescription('Based on ' + info.word_count + ' words from ' + nDT + ' to ' + oDT + '.')
-                    .setURL(baseImage)
-                    .setAuthor('INTP Bot')
-                    .addFields(
-                        { name: 'Openness', value: predictions.OPN.toFixed(2), inline: true},
-                        { name: 'Conscientiousness', value: predictions.CON.toFixed(2), inline: true},
-                        { name: 'Extraversion', value: predictions.EXT.toFixed(2), inline: true},
-                        { name: 'Agreeableness', value: predictions.AGR.toFixed(2), inline: true},
-                        { name: 'Neuroticism', value: predictions.NEU.toFixed(2), inline: true})
-                    .setImage(baseImage)
-                    .setTimestamp()
-                    .setFooter('© Conic, Sergen, Moe & IBM.');
-
-                    botmessage.channel.send(predictionEmbed);
-                    botmessage.delete();
-                    
-                    this.usersWaiting[user.id] = null;
-                
-                });*/
             }
         });
     }
