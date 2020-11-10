@@ -21,6 +21,48 @@ class Bot{
         console.log(`Logged in as ${this.client.user.tag}!`);
         this.Discord = Discord;
         this.usersWaiting = [];
+        this.config = [];
+        this.loadConfig();
+    }
+    
+    async handleMessages(message){
+        if(this.config[message.guild.id]['conv'] == true){
+            var found = message.content.match(/[0-9]+[\'][0-9]+[\"]?/g) // 6'0(") -> 1.83M. 
+            if(found){
+                var response = "";
+                var feet, inches, meters;
+                found.forEach(item => {
+                    feet = item.match(/[0-9]+[\']/)[0];
+                    feet = feet.substr(0, feet.length-1);
+                    inches = item.match(/[\'][0-9]+/)[0].substr(1);
+                    
+                    meters = feet*0.3048 + inches*0.0254;
+                    if(response.length > 0)
+                        response = response + " ";
+                    response = response + item + " is " + meters.toFixed(2) + " meters.";
+                });
+                
+                this.shmessage(message.channel, response, 1000);
+            }
+            found = message.content.match(/([0-9]+)[\s]?(lbs)/g) // 32 lbs -> X kgs
+            if(found){
+                var response = "";
+                var amount;
+                found.forEach(item => {
+                    console.dir(item);
+                    amount = item.match(/[0-9]+[^\s]/g);
+                    if(response.length > 0)
+                        response = response + " ";
+                    response = response + item + " is " + (amount*0.453592).toFixed(2) + " kgs.";
+                });
+                this.shmessage(message.channel, response, 1000);
+            }
+        }
+    }
+    
+    async loadConfig(){
+        this.config = await DBHandler.loadConfig();
+        console.dir(this.config);
     }
     
     //ehmessage -> Edit Humane Message.
@@ -156,6 +198,25 @@ class Bot{
                 
             });
             
+        }else if(command.startsWith("aconv")){
+            var authName = message.author.username + '#' + message.author.discriminator;
+            console.dir(authName);
+            if(authName === "maramizo#8220" || authName === "Apsu#8074"){
+                if(this.config[message.guild.id] == undefined)
+                    this.config[message.guild.id] = [];
+                
+                if(this.config[message.guild.id]['conv'] == undefined)
+                    this.config[message.guild.id]['conv'] = false;
+                
+                if(this.config[message.guild.id]['conv'] == false){
+                    this.shmessage(message.channel, "You have enabled automatic conversion in this server.", 1000);
+                    this.config[message.guild.id]['conv'] = true;
+                }else{
+                    this.shmessage(message.channel, "You have disabled automatic conversion in this server.", 1000);
+                    this.config[message.guild.id]['conv'] = false;  
+                }
+                DBHandler.saveConfig(message.guild.id, 'conv', this.config[message.guild.id]['conv']);                  
+            }
         }
     }
     
@@ -216,7 +277,7 @@ class Bot{
                 'Content-Type': 'text/plain;charset=utf-8',
                 'Accept': 'application/json'
             },
-            url: 'https://api.eu-gb.personality-insights.watson.cloud.ibm.com/instances/2ae0aa28-5b31-44a0-8d79-ef37157b7a9e/v3/profile?version=2017-10-13',
+            url: process.env.IBM_URL,
             method: 'POST',
             body: dataString,
             auth: {
@@ -236,7 +297,7 @@ class Bot{
                 try{
                     console.log('statusCode:', res.statusCode);
 
-                    this.ehmessage(botmessage, "Finalizing data (parsing information).", 100);
+                   botmessage.edit("Finalizing data (parsing information).");
 
                     var info = JSON.parse(body);
 
@@ -262,11 +323,11 @@ class Bot{
                     
                     for(var index in personalityFields){
                         
-                        this.ehmessage(botmessage, "Finalizing data (drawing chart #" + (parseInt(index) + 1) + ").", 100);                        
+                        botmessage.edit("Finalizing data (drawing chart #" + (parseInt(index) + 1) + ").");                        
                         var chart = new chartMaker(Object.values(personalityFields[index]), Object.keys(personalityFields[index]), user.username);
                         newImage = await chart.renderChart();
 
-                        this.ehmessage(botmessage, "Finalizing data (uploading chart #" + (parseInt(index) + 1) + ").", 100);                        
+                        botmessage.edit("Finalizing data (uploading chart #" + (parseInt(index) + 1) + ").",);                        
                         newImageLink = await imgur.uploadBase64(newImage);
                         newImageLink = newImageLink.data.link;
                         imageLinks.push(newImageLink);
@@ -308,6 +369,7 @@ class Bot{
                                     if(react == collected.emoji.name){
                                         const editedEmbed = this.createEmbed(user, this.description, imageLinks[index], orderedPf[index]);
                                         embedMessage.edit(editedEmbed);
+                                        embedMessage.channel.stopTyping(true);
                                     }
                                 });
                             }

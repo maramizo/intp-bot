@@ -14,6 +14,61 @@ class connectionHandler{
         });
     }    
     
+    async loadConfig(database = process.env.DB_NAME, collection = "config"){
+        const client = await MongoClient.connect(URL)
+            .catch(err => {console.log(err);});
+        
+        if(!client)
+            return;
+        
+        try{
+            var dbo = client.db(database);
+            let res = await dbo.collection(collection).find({}).toArray();
+            var formattedArr = {};
+            res.forEach(item => {
+                if(formattedArr[item.guild] == undefined)
+                    formattedArr[item.guild] = {};
+                formattedArr[item.guild][Object.keys(item)[2]] = item[Object.keys(item)[2]];
+            });
+            return formattedArr;
+        }catch(err){
+            throw err;
+        }finally{
+            client.close();
+        }
+    }
+    
+    async saveConfig(guild_id, configtype, configval, database = process.env.DB_NAME, collection = "config"){
+        const client = await MongoClient.connect(URL)
+            .catch(err => {console.log(err);});
+        
+        if(!client)
+            return;
+        
+        try{
+            var dbo = client.db(database);
+            
+            var filter = {};
+            filter['guild'] = guild_id;
+            filter[configtype] = { "$exists": true};
+            
+            var query = {};
+            query['guild'] = guild_id;
+            query[configtype] = configval;
+            
+            
+            let res = await dbo.collection(collection).updateOne(filter, { $set: query }, {upsert:true});
+            console.log(
+              `${res.matchedCount} document(s) matched the filter, updated ${res.modifiedCount} document(s)`,
+            );
+            return res;
+        }catch(err){
+            throw err;
+        }finally{
+            client.close();
+        }        
+    }
+    
     // findMessage finds the newest stored user message by default.
     // sortOrder = 1 finds the oldest.
     async findMessage(userid, sortOrder = -1, database = process.env.DB_NAME, collection = process.env.CL_NAME){
