@@ -10,11 +10,12 @@ client.on('ready', () => {
 
 client.on('message', msg => {
     var lowerCase = msg.content.toLowerCase();
-    
-    if(lowerCase.startsWith('i!') == true)
-        INTPBot.handleCommands(msg);
-    else if(msg.author.bot == false)
-        INTPBot.handleMessages(msg);
+    if(msg.author.bot == false){
+        if(lowerCase.startsWith('i!') == true)
+            INTPBot.handleCommands(msg);
+        else
+            INTPBot.handleMessages(msg);
+    }
 });
 
 client.login(process.env.BOT_TOKEN);
